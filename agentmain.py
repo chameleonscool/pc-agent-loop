@@ -124,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--task', metavar='IODIR', help='一次性任务模式(文件IO)')
     parser.add_argument('--reflect', metavar='SCRIPT', help='反射模式：加载监控脚本，check()触发时发任务')
     parser.add_argument('--llm_no', type=int, default=0, help='LLM编号')
+    parser.add_argument('--msg', metavar='TEXT', help='AI-Native单次任务模式：执行后退出')
     args = parser.parse_args()
 
     agent = GeneraticAgent()
@@ -189,6 +190,14 @@ if __name__ == '__main__':
                     dq = agent.put_task(f'按scheduled_task_sop执行任务文件 ../sche_tasks/pending/{f}（立刻移到running）\n内容：\n{raw}', source='scheduler')
                     threading.Thread(target=drain, args=(dq, f), daemon=True).start()
                     break
+    elif args.msg:
+        # AI-Native单次任务模式：执行后退出
+        agent.inc_out = True
+        dq = agent.put_task(args.msg, source='ai_native')
+        while True:
+            item = dq.get()
+            if 'next' in item: print(item['next'], end='', flush=True)
+            if 'done' in item: print(); break
     else:
         agent.inc_out = True
         while True:
