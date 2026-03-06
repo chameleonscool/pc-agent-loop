@@ -124,6 +124,11 @@ if __name__ == '__main__':
     parser.add_argument('--task', metavar='IODIR', help='一次性任务模式(文件IO)')
     parser.add_argument('--reflect', metavar='SCRIPT', help='反射模式：加载监控脚本，check()触发时发任务')
     parser.add_argument('--llm_no', type=int, default=0, help='LLM编号')
+    parser.add_argument('--msg', metavar='TEXT', help='AI-Native单次任务模式：执行后退出')
+    parser.add_argument('--session', metavar='FILE', help='会话文件路径（多轮对话）')
+    parser.add_argument('--poll', action='store_true', help='轮询模式：监听session并处理任务')
+    parser.add_argument('--send', metavar='TEXT', help='发送消息到session')
+    parser.add_argument('--wait', type=float, default=0, help='等待响应超时（秒），0=不等待')
     args = parser.parse_args()
 
     agent = GeneraticAgent()
@@ -189,6 +194,94 @@ if __name__ == '__main__':
                     dq = agent.put_task(f'按scheduled_task_sop执行任务文件 ../sche_tasks/pending/{f}（立刻移到running）\n内容：\n{raw}', source='scheduler')
                     threading.Thread(target=drain, args=(dq, f), daemon=True).start()
                     break
+    elif args.session:
+        # AI-Native多轮对话模式
+        import json
+        import time
+        import os
+        
+        session_file = args.session
+        
+        def load_session():
+            if os.path.exists(session_file):
+                with open(session_file, 'r') as f:
+                    return json.load(f)
+            return {'messages': [], 'status': 'idle', 'pending_input': '', 'pending_output': ''}
+        
+        def save_session(data):
+            with open(session_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        
+        if args.send:
+            # 发送消息模式：写入pending_input
+            session = load_session()
+            session['pending_input'] = args.send
+            session['status'] = 'pending'
+            save_session(session)
+            print(f'[Message sent to {session_file}]')
+            
+            if args.wait:
+                # 等待响应
+                start = time.time()
+                while time.time() - start < args.wait:
+                    session = load_session()
+                    if session['status'] == 'done' and session['pending_output']:
+                        print(session['pending_output'])
+                        session['pending_output'] = ''
+                        session['status'] = 'idle'
+                        save_session(session)
+                        break
+                    time.sleep(0.5)
+                else:
+                    print('[Timeout waiting for response]')
+        
+        elif args.poll:
+            # 轮询模式：持续监听并处理任务
+            print(f'[Polling {session_file}...]')
+            agent.inc_out = True
+            while True:
+                try:
+                    session = load_session()
+                    if session['status'] == 'pending' and session['pending_input']:
+                        msg = session['pending_input']
+                        session['pending_input'] = ''
+                        session['status'] = 'processing'
+                        save_session(session)
+                        
+                        # 处理任务
+                        output_lines = []
+                        dq = agent.put_task(msg, source='ai_native')
+                        while True:
+                            item = dq.get()
+                            if 'next' in item:
+                                output_lines.append(item['next'])
+                            if 'done' in item:
+                                break
+                        
+                        # 保存响应
+                        session = load_session()
+                        session['pending_output'] = ''.join(output_lines)
+                        session['status'] = 'done'
+                        session['messages'].append({'role': 'user', 'content': msg})
+                        session['messages'].append({'role': 'agent', 'content': session['pending_output']})
+                        save_session(session)
+                    
+                    time.sleep(0.5)
+                except KeyboardInterrupt:
+                    print('\n[Polling stopped]')
+                    break
+        
+        else:
+            print('Usage: --session FILE --send TEXT [--wait SEC] | --session FILE --poll')
+    
+    elif args.msg:
+        # AI-Native单次任务模式：执行后退出
+        agent.inc_out = True
+        dq = agent.put_task(args.msg, source='ai_native')
+        while True:
+            item = dq.get()
+            if 'next' in item: print(item['next'], end='', flush=True)
+            if 'done' in item: print(); break
     else:
         agent.inc_out = True
         while True:

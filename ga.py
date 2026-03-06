@@ -97,8 +97,10 @@ driver = None
 
 def first_init_driver():
     global driver
+    import os
     from TMWebDriver import TMWebDriver
-    driver = TMWebDriver()
+    port = int(os.environ.get('AGENT_PORT', 18765))
+    driver = TMWebDriver(port=port)
     for i in range(20):
         time.sleep(1)
         sess = driver.get_all_sessions()
