@@ -1,0 +1,15 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "\u4f60\u597d\uff0c\u8bf7\u544a\u8bc9\u62111+1\u7b49\u4e8e\u51e0"
+    },
+    {
+      "role": "agent",
+      "content": "**LLM Running (Turn 1) ...**\n\nError: HTTP 429 429 Client Error: Too Many Requests for url: https://open.bigmodel.cn/api/paas/v4/chat/completions; content_type: <empty>; retry_after: <empty>; request_id: <empty>; body: <empty>"
+    }
+  ],
+  "status": "done",
+  "pending_input": "",
+  "pending_output": "**LLM Running (Turn 1) ...**\n\nError: HTTP 429 429 Client Error: Too Many Requests for url: https://open.bigmodel.cn/api/paas/v4/chat/completions; content_type: <empty>; retry_after: <empty>; request_id: <empty>; body: <empty>"
+}
